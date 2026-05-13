@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="GVL" Id="{f507bcc2-1dcc-4177-9f32-30040971eaf3}">
+    <Declaration><![CDATA[VAR_GLOBAL
+    // Axis B Module 2 Outputs にリンクする変数
+    B_Controlword       AT %Q* : UINT;
+    B_TargetTorque      AT %Q* : INT;
+    B_CommutationAngle  AT %Q* : UINT;
+
+    // Axis B Module 2 Inputs にリンクする変数
+    B_Statusword        AT %I* : UINT;
+    B_TorqueActual      AT %I* : INT;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>
