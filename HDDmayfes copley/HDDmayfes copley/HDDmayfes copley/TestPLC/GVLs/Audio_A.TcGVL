@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="Audio_A" Id="{d6dbd7f2-53fb-4f73-b544-1c65f5de3b5b}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL CONSTANT
+    AUDIO_TABLE_MAX : UDINT := 500000;
+    AUDIO_TABLE_LAST: DINT := 499999;
+    AUDIO_CMD_MIN   : INT := -16000;
+    AUDIO_CMD_MAX   : INT := 16000;
+
+    AUDIO_STATE_IDLE     : UINT := 0;
+    AUDIO_STATE_PLAYING  : UINT := 1;
+    AUDIO_STATE_COMPLETE : UINT := 2;
+    AUDIO_STATE_FAULT    : UINT := 3;
+    AUDIO_STATE_ESTOP    : UINT := 4;
+
+    AUDIO_ERR_NONE          : UDINT := 0;
+    AUDIO_ERR_TABLE_LEN_ZERO: UDINT := 1;
+    AUDIO_ERR_TABLE_LEN_OVER: UDINT := 2;
+END_VAR
+
+VAR_GLOBAL
+    {attribute 'linkalways'}
+    Controlword  AT %Q* : UINT := 0;
+    {attribute 'linkalways'}
+    TargetTorque AT %Q* : INT := 0;
+
+    {attribute 'linkalways'}
+    Statusword   AT %I* : UINT := 0;
+
+    commandTable : ARRAY[0..AUDIO_TABLE_LAST] OF INT;
+    tableLen     : UDINT := 0;
+    repeatCount  : UDINT := 1;
+    runReq       : BOOL := FALSE;
+    resetReq     : BOOL := FALSE;
+    estopReq     : BOOL := FALSE;
+
+    idx          : UDINT := 0;
+    cycleCount   : UDINT := 0;
+    playbackDone : BOOL := FALSE;
+    errorCode    : UDINT := AUDIO_ERR_NONE;
+    outputValue  : INT := 0;
+    state        : UINT := AUDIO_STATE_IDLE;
+    swMasked     : UINT := 0;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

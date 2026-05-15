@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="Disk_B" Id="{f507bcc2-1dcc-4177-9f32-30040971eaf3}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+    // Disk_B Module 2 Outputs にリンクする変数
+    Controlword       AT %Q* : UINT;
+    TargetTorque      AT %Q* : INT;
+    CommutationAngle  AT %Q* : UINT;
+
+    // Disk_B Module 2 Inputs にリンクする変数
+    Statusword        AT %I* : UINT;
+    TorqueActual      AT %I* : INT;
+
+    // 操作用
+    RunCmd : BOOL := FALSE;
+
+    // Torque command
+    TorqueCmd      : INT := 0;       // 実際に出す値
+    TorqueTarget   : INT := 3000;    // 3000 ≒ 0.3 A
+    TorqueRampStep : INT := 5;       // 1 scanごとの上昇量。小さいほどゆっくり
+
+    // Electrical angle command
+    Angle           : LREAL := 0.0;  // 0.0 ～ 65535.0
+    AngleIncTarget  : LREAL := 10.0; // 目標速度。ここをWatchで変更する
+    AngleIncActual  : LREAL := 0.0;  // 実際に使う速度
+    AngleIncRampStep: LREAL := 0.02; // 1 scanごとの速度変化量。小さいほどゆっくり
+
+    // Internal
+    AngleIncDemand : LREAL := 0.0;
+    TorqueDemand   : INT := 0;
+    swMasked       : UINT;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

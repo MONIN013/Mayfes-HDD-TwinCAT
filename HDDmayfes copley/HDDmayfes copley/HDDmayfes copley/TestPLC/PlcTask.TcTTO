@@ -5,7 +5,10 @@
     <CycleTime>125</CycleTime>
     <Priority>20</Priority>
     <PouCall>
-      <Name>MAIN</Name>
+      <Name>PRG_Disk_B</Name>
+    </PouCall>
+    <PouCall>
+      <Name>PRG_Audio_A_Replay</Name>
     </PouCall>
     <TaskFBGuid>{641a2044-34e7-4ee3-86ef-806d472570da}</TaskFBGuid>
     <Fb_init>{9297ecb8-7f0a-4922-8fec-bb67138f80b0}</Fb_init>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="PRG_Disk_B" Id="{e6ae28cf-ed4a-44df-9e8d-7113f5ea0fb7}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM PRG_Disk_B]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Disk_B.swMasked := Disk_B.Statusword AND 16#006F;
+
+
+// FaultならFault Reset
+IF (Disk_B.Statusword AND 16#0008) <> 0 THEN
+    Disk_B.Controlword := 16#0080;
+
+    Disk_B.TargetTorque := 0;
+
+    Disk_B.TorqueCmd := 0;
+    Disk_B.AngleIncActual := 0.0;
+
+
+// Operation Enabled
+ELSIF Disk_B.swMasked = 16#0027 THEN
+    Disk_B.Controlword := 16#000F;
+
+
+    // -----------------------------
+    // 1. 目標速度を決める
+    // -----------------------------
+    IF Disk_B.RunCmd THEN
+        Disk_B.AngleIncDemand := Disk_B.AngleIncTarget;
+        Disk_B.TorqueDemand := Disk_B.TorqueTarget;
+    ELSE
+        // 停止指令時は出力トルクを即0にし、角速度指令だけを0へ戻す
+        Disk_B.AngleIncDemand := 0.0;
+        Disk_B.TorqueDemand := 0;
+        Disk_B.TorqueCmd := 0;
+    END_IF;
+
+
+    // -----------------------------
+    // 2. AngleIncActualをゆっくり追従させる
+    // -----------------------------
+    IF Disk_B.AngleIncActual < Disk_B.AngleIncDemand THEN
+        Disk_B.AngleIncActual := Disk_B.AngleIncActual + Disk_B.AngleIncRampStep;
+
+        IF Disk_B.AngleIncActual > Disk_B.AngleIncDemand THEN
+            Disk_B.AngleIncActual := Disk_B.AngleIncDemand;
+        END_IF
+
+    ELSIF Disk_B.AngleIncActual > Disk_B.AngleIncDemand THEN
+        Disk_B.AngleIncActual := Disk_B.AngleIncActual - Disk_B.AngleIncRampStep;
+
+        IF Disk_B.AngleIncActual < Disk_B.AngleIncDemand THEN
+            Disk_B.AngleIncActual := Disk_B.AngleIncDemand;
+        END_IF
+    END_IF;
+
+
+    // -----------------------------
+    // 3. TorqueCmdをゆっくり追従させる
+    // -----------------------------
+    IF Disk_B.TorqueCmd < Disk_B.TorqueDemand THEN
+        IF Disk_B.TorqueCmd + Disk_B.TorqueRampStep > Disk_B.TorqueDemand THEN
+            Disk_B.TorqueCmd := Disk_B.TorqueDemand;
+        ELSE
+            Disk_B.TorqueCmd := Disk_B.TorqueCmd + Disk_B.TorqueRampStep;
+        END_IF
+
+    ELSIF Disk_B.TorqueCmd > Disk_B.TorqueDemand THEN
+        IF Disk_B.TorqueCmd - Disk_B.TorqueRampStep < Disk_B.TorqueDemand THEN
+            Disk_B.TorqueCmd := Disk_B.TorqueDemand;
+        ELSE
+            Disk_B.TorqueCmd := Disk_B.TorqueCmd - Disk_B.TorqueRampStep;
+        END_IF
+    END_IF;
+
+
+    // -----------------------------
+    // 4. 電気角を進める
+    // -----------------------------
+    Disk_B.Angle := Disk_B.Angle + Disk_B.AngleIncActual;
+
+    WHILE Disk_B.Angle >= 65536.0 DO
+        Disk_B.Angle := Disk_B.Angle - 65536.0;
+    END_WHILE
+
+    WHILE Disk_B.Angle < 0.0 DO
+        Disk_B.Angle := Disk_B.Angle + 65536.0;
+    END_WHILE
+
+
+    // -----------------------------
+    // 5. BE2へ出力
+    // -----------------------------
+    Disk_B.TargetTorque := Disk_B.TorqueCmd;
+    Disk_B.CommutationAngle := LREAL_TO_UINT(Disk_B.Angle);
+
+
+// Switched on
+ELSIF Disk_B.swMasked = 16#0023 THEN
+    Disk_B.Controlword := 16#000F;
+
+    Disk_B.TargetTorque := 0;
+    Disk_B.TorqueCmd := 0;
+    Disk_B.AngleIncActual := 0.0;
+
+
+// Ready to switch on
+ELSIF Disk_B.swMasked = 16#0021 THEN
+    Disk_B.Controlword := 16#0007;
+
+    Disk_B.TargetTorque := 0;
+    Disk_B.TorqueCmd := 0;
+    Disk_B.AngleIncActual := 0.0;
+
+
+// Switch on disabled or other
+ELSE
+    Disk_B.Controlword := 16#0006;
+
+    Disk_B.TargetTorque := 0;
+    Disk_B.TorqueCmd := 0;
+    Disk_B.AngleIncActual := 0.0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="PRG_Disk_B">
+      <LineId Id="266" Count="120" />
+      <LineId Id="182" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

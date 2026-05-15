@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="PRG_Audio_A_Replay" Id="{8927d743-bc1d-4a0e-a57d-c2e7f7092438}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM PRG_Audio_A_Replay
+VAR
+    resetReqPrev  : BOOL := FALSE;
+    resetEdge     : BOOL := FALSE;
+    tableLenLocal : UDINT := 0;
+    tableIdx      : DINT := 0;
+    sampleValue   : INT := 0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Audio_A.swMasked := Audio_A.Statusword AND 16#006F;
+
+resetEdge := Audio_A.resetReq AND NOT resetReqPrev;
+tableLenLocal := Audio_A.tableLen;
+
+IF (Audio_A.Statusword AND 16#0008) <> 0 THEN
+    Audio_A.Controlword := 16#0080;
+    Audio_A.outputValue := 0;
+    Audio_A.TargetTorque := 0;
+    Audio_A.playbackDone := FALSE;
+    Audio_A.state := Audio_A.AUDIO_STATE_FAULT;
+
+ELSIF Audio_A.swMasked = 16#0027 THEN
+    Audio_A.Controlword := 16#000F;
+
+    IF Audio_A.estopReq THEN
+        Audio_A.outputValue := 0;
+        Audio_A.TargetTorque := 0;
+        Audio_A.playbackDone := FALSE;
+        Audio_A.state := Audio_A.AUDIO_STATE_ESTOP;
+
+    ELSIF resetEdge THEN
+        Audio_A.idx := 0;
+        Audio_A.cycleCount := 0;
+        Audio_A.playbackDone := FALSE;
+        Audio_A.errorCode := Audio_A.AUDIO_ERR_NONE;
+        Audio_A.outputValue := 0;
+        Audio_A.TargetTorque := 0;
+        Audio_A.state := Audio_A.AUDIO_STATE_IDLE;
+
+    ELSE
+        CASE Audio_A.state OF
+            Audio_A.AUDIO_STATE_IDLE:
+                Audio_A.outputValue := 0;
+                Audio_A.TargetTorque := 0;
+                Audio_A.playbackDone := FALSE;
+                Audio_A.errorCode := Audio_A.AUDIO_ERR_NONE;
+
+                IF Audio_A.runReq THEN
+                    IF tableLenLocal = 0 THEN
+                        Audio_A.errorCode := Audio_A.AUDIO_ERR_TABLE_LEN_ZERO;
+                        Audio_A.state := Audio_A.AUDIO_STATE_FAULT;
+                    ELSIF tableLenLocal > Audio_A.AUDIO_TABLE_MAX THEN
+                        Audio_A.errorCode := Audio_A.AUDIO_ERR_TABLE_LEN_OVER;
+                        Audio_A.state := Audio_A.AUDIO_STATE_FAULT;
+                    ELSE
+                        Audio_A.idx := 0;
+                        Audio_A.cycleCount := 0;
+                        Audio_A.playbackDone := FALSE;
+                        Audio_A.state := Audio_A.AUDIO_STATE_PLAYING;
+                    END_IF
+                END_IF
+
+            Audio_A.AUDIO_STATE_PLAYING:
+                IF NOT Audio_A.runReq THEN
+                    Audio_A.idx := 0;
+                    Audio_A.cycleCount := 0;
+                    Audio_A.outputValue := 0;
+                    Audio_A.TargetTorque := 0;
+                    Audio_A.playbackDone := FALSE;
+                    Audio_A.state := Audio_A.AUDIO_STATE_IDLE;
+
+                ELSIF tableLenLocal = 0 THEN
+                    Audio_A.outputValue := 0;
+                    Audio_A.TargetTorque := 0;
+                    Audio_A.playbackDone := FALSE;
+                    Audio_A.errorCode := Audio_A.AUDIO_ERR_TABLE_LEN_ZERO;
+                    Audio_A.state := Audio_A.AUDIO_STATE_FAULT;
+
+                ELSIF tableLenLocal > Audio_A.AUDIO_TABLE_MAX THEN
+                    Audio_A.outputValue := 0;
+                    Audio_A.TargetTorque := 0;
+                    Audio_A.playbackDone := FALSE;
+                    Audio_A.errorCode := Audio_A.AUDIO_ERR_TABLE_LEN_OVER;
+                    Audio_A.state := Audio_A.AUDIO_STATE_FAULT;
+
+                ELSIF Audio_A.idx < tableLenLocal THEN
+                    tableIdx := UDINT_TO_DINT(Audio_A.idx);
+                    sampleValue := Audio_A.commandTable[tableIdx];
+
+                    IF sampleValue > Audio_A.AUDIO_CMD_MAX THEN
+                        sampleValue := Audio_A.AUDIO_CMD_MAX;
+                    ELSIF sampleValue < Audio_A.AUDIO_CMD_MIN THEN
+                        sampleValue := Audio_A.AUDIO_CMD_MIN;
+                    END_IF
+
+                    Audio_A.outputValue := sampleValue;
+                    Audio_A.TargetTorque := sampleValue;
+                    Audio_A.idx := Audio_A.idx + 1;
+
+                    IF Audio_A.idx >= tableLenLocal THEN
+                        Audio_A.cycleCount := Audio_A.cycleCount + 1;
+
+                        IF Audio_A.repeatCount = 0 THEN
+                            Audio_A.idx := 0;
+                            Audio_A.playbackDone := FALSE;
+                        ELSIF Audio_A.cycleCount >= Audio_A.repeatCount THEN
+                            Audio_A.playbackDone := TRUE;
+                            Audio_A.state := Audio_A.AUDIO_STATE_COMPLETE;
+                        ELSE
+                            Audio_A.idx := 0;
+                            Audio_A.playbackDone := FALSE;
+                        END_IF
+                    END_IF
+
+                ELSE
+                    Audio_A.outputValue := 0;
+                    Audio_A.TargetTorque := 0;
+                    Audio_A.playbackDone := TRUE;
+                    Audio_A.state := Audio_A.AUDIO_STATE_COMPLETE;
+                END_IF
+
+            Audio_A.AUDIO_STATE_COMPLETE:
+                Audio_A.outputValue := 0;
+                Audio_A.TargetTorque := 0;
+
+                IF NOT Audio_A.runReq THEN
+                    Audio_A.idx := 0;
+                    Audio_A.playbackDone := FALSE;
+                    Audio_A.state := Audio_A.AUDIO_STATE_IDLE;
+                END_IF
+
+            Audio_A.AUDIO_STATE_FAULT:
+                Audio_A.outputValue := 0;
+                Audio_A.TargetTorque := 0;
+                Audio_A.playbackDone := FALSE;
+
+            Audio_A.AUDIO_STATE_ESTOP:
+                Audio_A.outputValue := 0;
+                Audio_A.TargetTorque := 0;
+                Audio_A.playbackDone := FALSE;
+        ELSE
+            Audio_A.outputValue := 0;
+            Audio_A.TargetTorque := 0;
+            Audio_A.playbackDone := FALSE;
+            Audio_A.errorCode := Audio_A.AUDIO_ERR_NONE;
+            Audio_A.cycleCount := 0;
+            Audio_A.state := Audio_A.AUDIO_STATE_IDLE;
+        END_CASE
+    END_IF
+
+ELSIF Audio_A.swMasked = 16#0023 THEN
+    Audio_A.Controlword := 16#000F;
+    Audio_A.outputValue := 0;
+    Audio_A.TargetTorque := 0;
+    IF Audio_A.estopReq THEN
+        Audio_A.state := Audio_A.AUDIO_STATE_ESTOP;
+    END_IF
+
+ELSIF Audio_A.swMasked = 16#0021 THEN
+    Audio_A.Controlword := 16#0007;
+    Audio_A.outputValue := 0;
+    Audio_A.TargetTorque := 0;
+    IF Audio_A.estopReq THEN
+        Audio_A.state := Audio_A.AUDIO_STATE_ESTOP;
+    END_IF
+
+ELSE
+    Audio_A.Controlword := 16#0006;
+    Audio_A.outputValue := 0;
+    Audio_A.TargetTorque := 0;
+    IF Audio_A.estopReq THEN
+        Audio_A.state := Audio_A.AUDIO_STATE_ESTOP;
+    END_IF
+END_IF
+
+resetReqPrev := Audio_A.resetReq;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
