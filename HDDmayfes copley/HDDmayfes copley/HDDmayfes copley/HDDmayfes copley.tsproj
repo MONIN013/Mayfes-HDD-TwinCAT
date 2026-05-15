@@ -43,6 +43,22 @@
 							<Name>Audio_A.TargetTorque</Name>
 							<Type>INT</Type>
 						</Var>
+						<Var>
+							<Name>Audio_A.Controlword2</Name>
+							<Type>UINT</Type>
+						</Var>
+						<Var>
+							<Name>Audio_A.TargetTorque2</Name>
+							<Type>INT</Type>
+						</Var>
+						<Var>
+							<Name>Audio_A.Controlword3</Name>
+							<Type>UINT</Type>
+						</Var>
+						<Var>
+							<Name>Audio_A.TargetTorque3</Name>
+							<Type>INT</Type>
+						</Var>
 					</Vars>
 					<Vars VarGrpType="1">
 						<Name>PlcTask Inputs</Name>
@@ -57,6 +73,14 @@
 						</Var>
 						<Var>
 							<Name>Audio_A.Statusword</Name>
+							<Type>UINT</Type>
+						</Var>
+						<Var>
+							<Name>Audio_A.Statusword2</Name>
+							<Type>UINT</Type>
+						</Var>
+						<Var>
+							<Name>Audio_A.Statusword3</Name>
 							<Type>UINT</Type>
 						</Var>
 					</Vars>
@@ -204,7 +228,7 @@
 						</Slot>
 					</EtherCAT>
 				</Box>
-				<Box Id="3" Disabled="true" BoxType="9099" BoxFlags="#x00000020">
+				<Box Id="3" BoxType="9099" BoxFlags="#x00000020">
 					<Name>Drive 3 (BE2)</Name>
 					<ImageId>1000</ImageId>
 					<EtherCAT SlaveType="2" PdiType="#x0208" MboxDataLinkLayer="true" CycleMBoxPolling="true" CoeType="15" EoeType="1" FoeType="1" VendorId="#x000000ab" ProductCode="#x000010c0" RevisionNo="#x00010004" InfoDataAddr="true" InfoDataSoeDS401="true" InfoDataDcTimes="true" EnableWdDivider0400="true" EnableWdTime0410="true" EnableWdTime0420="true" TimeoutStateChange1="100" TimeoutStateChange2="100" TimeoutStateChange3="100" TimeoutStateChange4="100" PortPhys="17" IdentificationAdo="308" SlotPdoIncrement="64" SlotIndexIncrement="2048" Type="BE2" Desc="BE2" PortABoxInfo="#x01000002">
@@ -322,8 +346,8 @@
 		<MappingInfo Identifier="{00000000-2001-0850-0020-500820000403}" Id="#x02030010"/>
 		<OwnerA Name="TIPC^TestPLC^TestPLC Instance">
 			<OwnerB Name="TIID^Device 3 (EtherCAT)^Drive 2 (BE2)">
-				<Link VarA="PlcTask Inputs^Audio_A.Statusword" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Inputs^Status word"/>
-				<Link VarA="PlcTask Inputs^Disk_B.Statusword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
+				<Link VarA="PlcTask Inputs^Audio_A.Statusword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
+				<Link VarA="PlcTask Inputs^Disk_B.Statusword" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Inputs^Status word"/>
 				<Link VarA="PlcTask Inputs^Disk_B.TorqueActual" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Inputs^Torque actual value"/>
 				<Link VarA="PlcTask Outputs^Audio_A.Controlword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
 				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
@@ -332,10 +356,12 @@
 				<Link VarA="PlcTask Outputs^Disk_B.TargetTorque" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Outputs^Target Torque"/>
 			</OwnerB>
 			<OwnerB Name="TIID^Device 3 (EtherCAT)^Drive 3 (BE2)">
-				<Link VarA="PlcTask Outputs^Audio_A.Controlword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
-				<Link VarA="PlcTask Outputs^Audio_A.Controlword" VarB="Module 2 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
-				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
-				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque" VarB="Module 2 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
+				<Link VarA="PlcTask Inputs^Audio_A.Statusword2" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
+				<Link VarA="PlcTask Inputs^Audio_A.Statusword3" VarB="Module 2 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
+				<Link VarA="PlcTask Outputs^Audio_A.Controlword2" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
+				<Link VarA="PlcTask Outputs^Audio_A.Controlword3" VarB="Module 2 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
+				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque2" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
+				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque3" VarB="Module 2 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
 			</OwnerB>
 		</OwnerA>
 	</Mappings>

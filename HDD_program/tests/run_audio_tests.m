@@ -26,6 +26,18 @@ assert(metadata.items(2).motionFrequencyHz == 2.0, "Default WAV item motion freq
 assert(metadata.items(2).motionHeadroomScale <= 1, "Visible motion must not increase audio headroom.");
 assert(metadata.items(2).sourceFormat == "WAV", "Default WAV metadata must include its source format.");
 
+drive_cfg = hddaudio.defaultConfig( ...
+    "commandLimit", 100, ...
+    "audioDriveGains", [1 0.5], ...
+    "audioDriveDelaySamples", [0 2], ...
+    "audioDrivePolarities", [1 -1]);
+[drive_commands, drive_config] = hddaudio.expandDriveCommands(int16([80; -120; 40; 20]), drive_cfg);
+assert(isequal(drive_commands(:, 1), int16([80; -100; 40; 20])), ...
+    "Drive 1 command must preserve the clamped source command.");
+assert(isequal(drive_commands(:, 2), int16([0; 0; -40; 50])), ...
+    "Drive 2 command must apply delay, gain, polarity, and clamp.");
+assert(drive_config.driveCount == 2, "Drive config metadata must expose the drive count.");
+
 mock = hddaudio.MockAdsTransport();
 cfg.transport = mock;
 ctrl = hddaudio.AudioReplayController(cfg);
@@ -36,9 +48,26 @@ assert(~upload_metadata.started, "Upload must not start playback.");
 symbols = string({mock.Writes.symbol});
 net_types = string({mock.Writes.netType});
 assert(any(symbols == "Audio_A.commandTable"), "commandTable was not written.");
+assert(any(symbols == "Audio_A.commandTable2"), "commandTable2 was not written.");
+assert(any(symbols == "Audio_A.commandTable3"), "commandTable3 was not written.");
 assert(any(symbols == "Audio_A.tableLen"), "tableLen was not written.");
+assert(find(symbols == "Audio_A.tableLen", 1) > find(symbols == "Audio_A.commandTable3", 1), ...
+    "tableLen must be written after all audio drive tables.");
 assert(nnz(symbols == "Audio_A.resetReq") == 2, "resetReq must be pulsed TRUE then FALSE.");
-assert(any(net_types == "System.Int16"), "INT table write must use System.Int16.");
+assert(nnz(net_types == "System.Int16") >= 3, "Each INT table write must use System.Int16.");
+assert(upload_metadata.audioDriveCount == 3, "Default upload must target three audio drives.");
+
+single_mock = hddaudio.MockAdsTransport();
+single_cfg = hddaudio.defaultConfig( ...
+    "resetPulseSeconds", 0, ...
+    "audioDriveGains", 1, ...
+    "audioDriveDelaySamples", 0);
+single_cfg.transport = single_mock;
+single_ctrl = hddaudio.AudioReplayController(single_cfg);
+single_ctrl.upload(command, metadata);
+single_symbols = string({single_mock.Writes.symbol});
+assert(any(single_symbols == "Audio_A.commandTable"), "Single-drive upload must write commandTable.");
+assert(~any(single_symbols == "Audio_A.commandTable2"), "Single-drive upload must not write commandTable2.");
 
 mock.clear();
 ctrl.start("loop");
@@ -85,6 +114,8 @@ mock.setRead("Audio_A.errorCode", uint32(0));
 mock.setRead("Audio_A.outputValue", int16(321));
 status = ctrl.readStatus();
 
+assert(status.driveCount == 3, "readStatus must expose the configured audio drive count.");
+assert(numel(status.statuswords) == 3, "readStatus must expose per-drive statuswords.");
 assert(status.statusword == hex2dec('0027'), "readStatus must read Audio_A Statusword.");
 assert(status.controlword == hex2dec('000F'), "readStatus must read Audio_A Controlword.");
 assert(status.state == 1, "readStatus must read state.");
@@ -196,9 +227,15 @@ assert(flac_metadata.items(1).resampleMethod == "polyphase", "FLAC resampling mu
 preview_metadata = hddaudio.writePreviewWav(flac_command, flac_metadata, resample_cfg);
 assert(isfield(preview_metadata, "previewWavFile"), "Preview metadata must include the WAV file path.");
 assert(isfile(preview_metadata.previewWavFile), "Preview WAV must be written.");
+assert(isfield(preview_metadata, "drivePreviewWavFile"), "Preview metadata must include the drive WAV file path.");
+assert(isfile(preview_metadata.drivePreviewWavFile), "Drive preview WAV must be written.");
 preview_info = audioinfo(preview_metadata.previewWavFile);
 assert(preview_info.SampleRate == target_rate_hz, "Preview WAV must use the PLC sample rate.");
 assert(preview_info.NumChannels == 1, "Preview WAV must be mono.");
+drive_preview_info = audioinfo(preview_metadata.drivePreviewWavFile);
+assert(drive_preview_info.SampleRate == target_rate_hz, "Drive preview WAV must use the PLC sample rate.");
+assert(drive_preview_info.NumChannels == numel(resample_cfg.audioDriveGains), ...
+    "Drive preview WAV must contain one channel per configured audio drive.");
 [preview_audio, preview_rate_hz] = audioread(preview_metadata.previewWavFile);
 assert(preview_rate_hz == target_rate_hz, "Preview WAV must be readable at the PLC sample rate.");
 assert(size(preview_audio, 2) == 1, "Preview samples must be one channel.");

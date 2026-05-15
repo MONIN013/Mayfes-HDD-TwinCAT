@@ -21,27 +21,45 @@ END_VAR
 
 VAR_GLOBAL
     {attribute 'linkalways'}
-    Controlword  AT %Q* : UINT := 0;
+    Controlword   AT %Q* : UINT := 0;
     {attribute 'linkalways'}
-    TargetTorque AT %Q* : INT := 0;
+    TargetTorque  AT %Q* : INT := 0;
+    {attribute 'linkalways'}
+    Controlword2  AT %Q* : UINT := 0;
+    {attribute 'linkalways'}
+    TargetTorque2 AT %Q* : INT := 0;
+    {attribute 'linkalways'}
+    Controlword3  AT %Q* : UINT := 0;
+    {attribute 'linkalways'}
+    TargetTorque3 AT %Q* : INT := 0;
 
     {attribute 'linkalways'}
-    Statusword   AT %I* : UINT := 0;
+    Statusword    AT %I* : UINT := 0;
+    {attribute 'linkalways'}
+    Statusword2   AT %I* : UINT := 0;
+    {attribute 'linkalways'}
+    Statusword3   AT %I* : UINT := 0;
 
-    commandTable : ARRAY[0..AUDIO_TABLE_LAST] OF INT;
-    tableLen     : UDINT := 0;
-    repeatCount  : UDINT := 1;
-    runReq       : BOOL := FALSE;
-    resetReq     : BOOL := FALSE;
-    estopReq     : BOOL := FALSE;
+    commandTable  : ARRAY[0..AUDIO_TABLE_LAST] OF INT;
+    commandTable2 : ARRAY[0..AUDIO_TABLE_LAST] OF INT;
+    commandTable3 : ARRAY[0..AUDIO_TABLE_LAST] OF INT;
+    tableLen      : UDINT := 0;
+    repeatCount   : UDINT := 1;
+    runReq        : BOOL := FALSE;
+    resetReq      : BOOL := FALSE;
+    estopReq      : BOOL := FALSE;
 
-    idx          : UDINT := 0;
-    cycleCount   : UDINT := 0;
-    playbackDone : BOOL := FALSE;
-    errorCode    : UDINT := AUDIO_ERR_NONE;
-    outputValue  : INT := 0;
-    state        : UINT := AUDIO_STATE_IDLE;
-    swMasked     : UINT := 0;
+    idx           : UDINT := 0;
+    cycleCount    : UDINT := 0;
+    playbackDone  : BOOL := FALSE;
+    errorCode     : UDINT := AUDIO_ERR_NONE;
+    outputValue   : INT := 0;
+    outputValue2  : INT := 0;
+    outputValue3  : INT := 0;
+    state         : UINT := AUDIO_STATE_IDLE;
+    swMasked      : UINT := 0;
+    swMasked2     : UINT := 0;
+    swMasked3     : UINT := 0;
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>

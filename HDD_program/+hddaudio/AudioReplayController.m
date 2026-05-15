@@ -44,16 +44,25 @@ classdef AudioReplayController < handle
 
             notifyProgress(progressCallback, 0.05, "Upload: normalizing command");
             command = hddaudio.normalizeCommand(command, obj.Config);
+            [driveCommands, driveConfig] = hddaudio.expandDriveCommands(command, obj.Config);
             symbols = hddaudio.symbols(obj.Config.namespace);
             types = hddaudio.netTypes();
+            driveCount = size(driveCommands, 2);
+            if driveCount > numel(symbols.commandTables)
+                error("hddaudio:invalidAudioDriveConfig", ...
+                    "PLC symbols only define %d audio drive command tables.", numel(symbols.commandTables));
+            end
 
             notifyProgress(progressCallback, 0.15, "Upload: resetting replay");
             obj.Transport.writeScalar(symbols.runReq, false, types.bool);
             obj.Transport.writeScalar(symbols.resetReq, true, types.bool);
             pause(obj.Config.resetPulseSeconds);
             obj.Transport.writeScalar(symbols.resetReq, false, types.bool);
-            notifyProgress(progressCallback, 0.35, "Upload: writing command table");
-            obj.Transport.writeArray(symbols.commandTable, command, types.i16);
+            for driveIdx = 1:driveCount
+                notifyProgress(progressCallback, 0.25 + 0.55 * driveIdx / driveCount, ...
+                    sprintf("Upload: writing drive %d command table", driveIdx));
+                obj.Transport.writeArray(symbols.commandTables(driveIdx), driveCommands(:, driveIdx), types.i16);
+            end
             notifyProgress(progressCallback, 0.85, "Upload: writing table length");
             obj.Transport.writeScalar(symbols.tableLen, uint32(numel(command)), types.u32);
 
@@ -63,6 +72,10 @@ classdef AudioReplayController < handle
             metadata.amsNetId = obj.Config.amsNetId;
             metadata.plcPort = obj.Config.plcPort;
             metadata.namespace = obj.Config.namespace;
+            metadata.audioDriveCount = driveConfig.driveCount;
+            metadata.audioDriveGains = driveConfig.audioDriveGains;
+            metadata.audioDriveDelaySamples = driveConfig.audioDriveDelaySamples;
+            metadata.audioDrivePolarities = driveConfig.audioDrivePolarities;
             metadata.started = false;
             metadata.mode = "uploaded";
             obj.LastMetadata = metadata;
@@ -137,10 +150,24 @@ classdef AudioReplayController < handle
         function status = readStatus(obj)
             symbols = hddaudio.symbols(obj.Config.namespace);
             types = hddaudio.netTypes();
+            driveCount = numel(double(obj.Config.audioDriveGains(:)));
+            if driveCount < 1 || driveCount > numel(symbols.statuswords)
+                error("hddaudio:invalidAudioDriveConfig", ...
+                    "audioDriveGains must define between 1 and %d drives.", numel(symbols.statuswords));
+            end
 
             status = struct();
-            status.statusword = double(obj.Transport.readScalar(symbols.statusword, types.u16));
-            status.controlword = double(obj.Transport.readScalar(symbols.controlword, types.u16));
+            status.statuswords = zeros(1, driveCount);
+            status.controlwords = zeros(1, driveCount);
+            status.outputValues = zeros(1, driveCount);
+            for driveIdx = 1:driveCount
+                status.statuswords(driveIdx) = double(obj.Transport.readScalar(symbols.statuswords(driveIdx), types.u16));
+                status.controlwords(driveIdx) = double(obj.Transport.readScalar(symbols.controlwords(driveIdx), types.u16));
+                status.outputValues(driveIdx) = double(obj.Transport.readScalar(symbols.outputValues(driveIdx), types.i16));
+            end
+            status.driveCount = driveCount;
+            status.statusword = status.statuswords(1);
+            status.controlword = status.controlwords(1);
             status.state = double(obj.Transport.readScalar(symbols.state, types.u16));
             status.stateName = hddaudio.stateName(status.state);
             status.idx = double(obj.Transport.readScalar(symbols.idx, types.u32));
@@ -149,7 +176,7 @@ classdef AudioReplayController < handle
             status.cycleCount = double(obj.Transport.readScalar(symbols.cycleCount, types.u32));
             status.playbackDone = logical(obj.Transport.readScalar(symbols.playbackDone, types.bool));
             status.errorCode = double(obj.Transport.readScalar(symbols.errorCode, types.u32));
-            status.outputValue = double(obj.Transport.readScalar(symbols.outputValue, types.i16));
+            status.outputValue = status.outputValues(1);
         end
     end
 end

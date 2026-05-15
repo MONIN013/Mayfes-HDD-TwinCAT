@@ -24,6 +24,19 @@ audiowrite(preview_file, preview_audio, sample_rate_hz);
 
 metadata.previewWavFile = string(preview_file);
 metadata.previewSampleRateHz = double(sample_rate_hz);
+
+[drive_commands, drive_config] = hddaudio.expandDriveCommands(command, cfg);
+drive_preview_file = fullfile(char(cfg.soundDir), "hdd_audio_drive_preview.wav");
+drive_preview_audio = double(drive_commands) ./ double(cfg.commandLimit);
+drive_preview_audio = min(max(drive_preview_audio, -1), 1);
+audiowrite(drive_preview_file, drive_preview_audio, sample_rate_hz);
+
+metadata.drivePreviewWavFile = string(drive_preview_file);
+metadata.drivePreviewSampleRateHz = double(sample_rate_hz);
+metadata.audioDriveCount = drive_config.driveCount;
+metadata.audioDriveGains = drive_config.audioDriveGains;
+metadata.audioDriveDelaySamples = drive_config.audioDriveDelaySamples;
+metadata.audioDrivePolarities = drive_config.audioDrivePolarities;
 end
 
 function sample_rate_hz = preview_sample_rate(metadata, cfg)

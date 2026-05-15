@@ -13,6 +13,9 @@ p.addParameter("resetPulseSeconds", 0.02, @(x)isnumeric(x) && isscalar(x) && isf
 p.addParameter("soundDir", fullfile(project_dir, "Sound"), @(x)ischar(x) || isstring(x));
 p.addParameter("adsAssembly", "", @(x)ischar(x) || isstring(x));
 p.addParameter("namespace", "Audio_A", @(x)ischar(x) || isstring(x));
+p.addParameter("audioDriveGains", [1.00 0.90 0.80], @is_numeric_vector);
+p.addParameter("audioDriveDelaySamples", [0 8 16], @is_numeric_vector);
+p.addParameter("audioDrivePolarities", [1 1 1], @is_numeric_vector);
 p.addParameter("defaultAudioClip", 0.1, @is_positive_scalar);
 p.addParameter("defaultTorqueScale", 3 * 40000, @is_positive_scalar);
 p.addParameter("defaultVisibleMotionAmplitude", 8000, @is_nonnegative_scalar);
@@ -38,6 +41,9 @@ cfg.resetPulseSeconds = double(cfg.resetPulseSeconds);
 cfg.soundDir = string(cfg.soundDir);
 cfg.adsAssembly = string(cfg.adsAssembly);
 cfg.namespace = string(cfg.namespace);
+cfg.audioDriveGains = double(cfg.audioDriveGains(:)).';
+cfg.audioDriveDelaySamples = double(cfg.audioDriveDelaySamples(:)).';
+cfg.audioDrivePolarities = double(cfg.audioDrivePolarities(:)).';
 cfg.defaultAudioClip = double(cfg.defaultAudioClip);
 cfg.defaultTorqueScale = double(cfg.defaultTorqueScale);
 cfg.defaultVisibleMotionAmplitude = double(cfg.defaultVisibleMotionAmplitude);
@@ -66,4 +72,8 @@ end
 
 function tf = is_finite_scalar(value)
 tf = isnumeric(value) && isscalar(value) && isfinite(value);
+end
+
+function tf = is_numeric_vector(value)
+tf = isnumeric(value) && isvector(value) && ~isempty(value) && all(isfinite(value(:)));
 end
