@@ -27,6 +27,7 @@ cfg.audioDriveGains = double(cfg.audioDriveGains(:)).';
 cfg.audioDriveDelaySamples = double(cfg.audioDriveDelaySamples(:)).';
 cfg.audioDrivePolarities = double(cfg.audioDrivePolarities(:)).';
 cfg.defaultAudioClip = double(cfg.defaultAudioClip);
+cfg.defaultAudioAmplitude = double(cfg.defaultAudioAmplitude);
 cfg.defaultTorqueScale = double(cfg.defaultTorqueScale);
 cfg.defaultVisibleMotionAmplitude = double(cfg.defaultVisibleMotionAmplitude);
 cfg.defaultVisibleMotionFrequencyHz = double(cfg.defaultVisibleMotionFrequencyHz);

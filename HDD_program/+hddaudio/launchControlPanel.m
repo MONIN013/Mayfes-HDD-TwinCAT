@@ -21,7 +21,7 @@ audioCtrl = hddaudio.AudioReplayController(cfg);
 diskCtrl = hddaudio.DiskBController(cfg);
 
 audioSpec = hddaudio.defaultSpec();
-audioItems = specItems(audioSpec);
+audioItems = specItems(audioSpec, cfg);
 [command, metadata] = hddaudio.buildCommand(audioSpec, cfg);
 metadata = hddaudio.writePreviewWav(command, metadata, cfg);
 
@@ -136,7 +136,7 @@ loadSpecButton = uibutton(playlistButtonGrid, "Text", "Load Spec", "ButtonPushed
 loadSpecButton.Layout.Row = 7;
 
 playlistTable = uitable(playlistGrid, ...
-    "ColumnName", {"Type", "File / Label", "Clip", "Scale", "Trim Tail (s)", "Motion Amp", "Motion Hz", "Samples"}, ...
+    "ColumnName", {"Type", "File / Label", "Clip", "Amp", "Trim Tail (s)", "Motion Amp", "Motion Hz", "Samples"}, ...
     "ColumnEditable", [false true true true true true true false], ...
     "CellEditCallback", @onPlaylistEdited, ...
     "CellSelectionCallback", @onPlaylistSelected);
@@ -391,29 +391,51 @@ refreshAllStatus();
 
         item = audioItems{row};
         itemType = lower(strtrim(string(item.type)));
-        if ~isAudioItemType(itemType)
+        if ~isAudioItemType(itemType) && ~(itemType == "square" && col == 4)
             playlistTable.Data = playlistData(audioItems, metadata);
-            messageLabel.Text = "Only audio rows are editable.";
+            messageLabel.Text = "Only audio rows and square Amp are editable.";
             return;
         end
 
         try
             switch col
                 case 2
+                    if ~isAudioItemType(itemType)
+                        error("hddaudio:invalidPlaylistEdit", "Only audio file cells are editable.");
+                    end
                     newFile = strtrim(string(event.NewData));
                     if strlength(newFile) == 0
                         error("hddaudio:invalidSpecItem", "Audio file cannot be empty.");
                     end
                     item.file = char(newFile);
                 case 3
-                    item.clip = numericValue(event.NewData, "Clip", 0, Inf);
+                    if ~isAudioItemType(itemType)
+                        error("hddaudio:invalidPlaylistEdit", "Only audio Clip cells are editable.");
+                    end
+                    item.clip = numericValue(event.NewData, "Clip", eps, Inf);
                 case 4
-                    item.scale = numericValue(event.NewData, "Scale", 0, Inf);
+                    if itemType == "square"
+                        item.amplitude = numericValue(event.NewData, "Amp", 0, cfg.commandLimit);
+                    else
+                        item.amp = numericValue(event.NewData, "Amp", 0, cfg.commandLimit);
+                        if isfield(item, "scale")
+                            item = rmfield(item, "scale");
+                        end
+                    end
                 case 5
+                    if ~isAudioItemType(itemType)
+                        error("hddaudio:invalidPlaylistEdit", "Only audio Trim Tail cells are editable.");
+                    end
                     item.trimTailSeconds = numericValue(event.NewData, "Trim Tail", 0, Inf);
                 case 6
+                    if ~isAudioItemType(itemType)
+                        error("hddaudio:invalidPlaylistEdit", "Only audio Motion Amp cells are editable.");
+                    end
                     item.motionAmplitude = numericValue(event.NewData, "Motion Amp", 0, cfg.commandLimit);
                 case 7
+                    if ~isAudioItemType(itemType)
+                        error("hddaudio:invalidPlaylistEdit", "Only audio Motion Hz cells are editable.");
+                    end
                     item.motionFrequencyHz = numericValue(event.NewData, "Motion Hz", 0, Inf);
             end
             audioItems{row} = item;
@@ -443,7 +465,7 @@ refreshAllStatus();
                 "type", "audio", ...
                 "file", char(audioFileRef(fullPath, cfg.soundDir)), ...
                 "clip", cfg.defaultAudioClip, ...
-                "scale", cfg.defaultTorqueScale, ...
+                "amp", cfg.defaultAudioAmplitude, ...
                 "trimTailSeconds", 0, ...
                 "motionAmplitude", cfg.defaultVisibleMotionAmplitude, ...
                 "motionFrequencyHz", cfg.defaultVisibleMotionFrequencyHz);
@@ -510,7 +532,7 @@ refreshAllStatus();
 
         try
             audioSpec = hddaudio.loadSpec(fullfile(pathName, fileName));
-            audioItems = specItems(audioSpec);
+            audioItems = specItems(audioSpec, cfg);
             selectedAudioRow = [];
             rebuildAudio(sprintf("Loaded spec: %s", fileName));
         catch err
@@ -665,6 +687,8 @@ refreshAllStatus();
             plot(waveAxes, 0, 0, "Color", [0.06 0.28 0.44], "LineWidth", 0.85);
         end
         yline(waveAxes, 0, ":", "Color", [0.55 0.55 0.55]);
+        yline(waveAxes, double(metadata.commandLimit), "--", "Color", [0.80 0.25 0.25]);
+        yline(waveAxes, -double(metadata.commandLimit), "--", "Color", [0.80 0.25 0.25]);
         addSegmentMarkers(yLimits);
         cursorLine = line(waveAxes, [0 0], yLimits, ...
             "Color", [0.88 0.18 0.10], "LineWidth", 2.0);
@@ -827,10 +851,21 @@ refreshAllStatus();
     end
 end
 
-function items = specItems(spec)
+function items = specItems(spec, cfg)
 items = spec.items;
 if isstruct(items)
     items = num2cell(items);
+end
+for idx = 1:numel(items)
+    item = items{idx};
+    itemType = lower(strtrim(string(item.type)));
+    if isAudioItemType(itemType) && ~isfield(item, "amp")
+        item.amp = cfg.defaultAudioAmplitude;
+        if isfield(item, "scale")
+            item = rmfield(item, "scale");
+        end
+        items{idx} = item;
+    end
 end
 end
 
@@ -852,14 +887,14 @@ for idx = 1:rowCount
     if isAudioItemType(itemType)
         data{idx, 2} = char(itemValue(item, "file", ""));
         data{idx, 3} = itemValue(item, "clip", NaN);
-        data{idx, 4} = itemValue(item, "scale", NaN);
+        data{idx, 4} = itemValue(item, "amp", NaN);
         data{idx, 5} = itemValue(item, "trimTailSeconds", 0);
         data{idx, 6} = itemValue(item, "motionAmplitude", 0);
         data{idx, 7} = itemValue(item, "motionFrequencyHz", 0);
     else
         data{idx, 2} = char(itemLabel(item));
         data{idx, 3} = NaN;
-        data{idx, 4} = NaN;
+        data{idx, 4} = itemValue(item, "amplitude", NaN);
         data{idx, 5} = NaN;
         data{idx, 6} = NaN;
         data{idx, 7} = NaN;

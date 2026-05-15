@@ -10,10 +10,13 @@ spec = hddaudio.defaultSpec();
 [command, metadata] = hddaudio.buildCommand(spec, cfg);
 
 assert(isa(command, "int16"), "buildCommand must return int16 commands.");
+assert(cfg.commandLimit == 16000, "Default commandLimit must preserve the PLC command envelope.");
+assert(cfg.defaultAudioAmplitude == 3500, "Default audio amplitude must leave headroom for visible motion.");
 assert(metadata.sampleRateHz == 8000, "Sample rate must match the 8 kHz PLC task.");
 assert(numel(command) <= 500000, "Command table exceeds PLC table capacity.");
 assert(all(double(command) <= cfg.commandLimit), "Command exceeds positive clamp.");
 assert(all(double(command) >= -cfg.commandLimit), "Command exceeds negative clamp.");
+assert(max(abs(double(command))) <= 5000, "Default command must stay inside the 5000 torque envelope.");
 assert(numel(metadata.items) == 4, "Default spec must contain four replay items.");
 assert(isfield(metadata.items, "sourceSampleRateHz"), "Metadata must include source sample rates.");
 assert(isfield(metadata.items, "sourceFormat"), "Metadata must include source formats.");
@@ -179,11 +182,32 @@ resample_spec.name = "resample";
 resample_spec.items = {struct("type", "wav", "file", "four_k.wav", "clip", 0.1, "scale", 10000, "trimTailSeconds", 0)};
 [resampled_command, resampled_metadata] = hddaudio.buildCommand(resample_spec, resample_cfg);
 assert(numel(resampled_command) == target_rate_hz, "Resampled command length must match target rate.");
+assert(max(abs(double(resampled_command))) > 0, "Legacy scale specs must still produce audio commands.");
 assert(resampled_metadata.items(1).sourceSampleRateHz == source_rate_hz, ...
     "Metadata must keep the original WAV sample rate.");
 assert(resampled_metadata.items(1).wasResampled, "Metadata must flag resampled WAV items.");
 assert(resampled_metadata.items(1).resampleMethod == "polyphase", "Resampled items must report polyphase resampling.");
 assert(resampled_metadata.items(1).motionAmplitude == 0, "WAV items without visible motion must keep motion disabled.");
+
+amp_spec = struct();
+amp_spec.name = "amp";
+amp_spec.items = {struct("type", "audio", "file", "four_k.wav", "clip", 1.0, ...
+    "amp", 2000, "trimTailSeconds", 0, "motionAmplitude", 0)};
+[amp_command, amp_metadata] = hddaudio.buildCommand(amp_spec, resample_cfg);
+assert(abs(max(abs(double(amp_command))) - 2000) <= 1, ...
+    "Audio amp must normalize the command peak to the requested amplitude.");
+assert(amp_metadata.items(1).motionHeadroomScale == 1, ...
+    "Amp-normalized audio without motion must not be headroom-scaled.");
+
+loud_spec = struct();
+loud_spec.name = "loud";
+loud_spec.items = {struct("type", "audio", "file", "four_k.wav", "clip", 1.0, ...
+    "amp", 20000, "trimTailSeconds", 0, "motionAmplitude", 1000, "motionFrequencyHz", 2.0)};
+[loud_command, loud_metadata] = hddaudio.buildCommand(loud_spec, resample_cfg);
+assert(any(abs(double(loud_command)) == resample_cfg.commandLimit), ...
+    "Over-limit amp specs must be allowed to clip at commandLimit.");
+assert(loud_metadata.items(1).motionHeadroomScale == 1, ...
+    "Amp-normalized audio must not be implicitly lowered for motion headroom.");
 
 wav441_file = fullfile(tmp_dir, "forty_four_k.wav");
 source_rate_hz = 44100;

@@ -71,12 +71,20 @@ for idx = 1:numel(items)
             end
 
             clip_level = item_value(item, "clip", cfg.defaultAudioClip);
-            torque_scale = item_value(item, "scale", cfg.defaultTorqueScale);
-            segment = scale_audio(samples, clip_level, torque_scale);
             motion_amplitude = item_value(item, "motionAmplitude", 0);
             motion_frequency_hz = item_value(item, "motionFrequencyHz", cfg.defaultVisibleMotionFrequencyHz);
+            use_amp = isfield(item, "amp") || ~isfield(item, "scale");
+            if use_amp
+                audio_amplitude = item_value(item, "amp", cfg.defaultAudioAmplitude);
+                segment = scale_audio_to_amplitude(samples, clip_level, audio_amplitude);
+                scale_motion_headroom = false;
+            else
+                torque_scale = item_value(item, "scale", cfg.defaultTorqueScale);
+                segment = scale_audio(samples, clip_level, torque_scale);
+                scale_motion_headroom = true;
+            end
             [segment, motion_headroom_scale, motion_frequency_hz] = add_visible_motion( ...
-                segment, cfg.taskRateHz, motion_amplitude, motion_frequency_hz, cfg.commandLimit);
+                segment, cfg.taskRateHz, motion_amplitude, motion_frequency_hz, cfg.commandLimit, scale_motion_headroom);
             label = char(file_name);
             source_file = file_name;
             source_count = source_count + 1;
@@ -214,11 +222,37 @@ end
 end
 
 function out = scale_audio(samples, clip_level, torque_scale)
+validate_clip_level(clip_level);
 samples = clamp(double(samples(:)), -clip_level, clip_level);
 out = samples * double(torque_scale);
 end
 
-function [out, headroom_scale, frequency_hz] = add_visible_motion(segment, sample_rate_hz, amplitude, frequency_hz, command_limit)
+function out = scale_audio_to_amplitude(samples, clip_level, target_amplitude)
+validate_clip_level(clip_level);
+if ~isnumeric(target_amplitude) || ~isscalar(target_amplitude) || ...
+        ~isfinite(target_amplitude) || target_amplitude < 0
+    error("hddaudio:invalidSpecItem", "amp must be a finite non-negative scalar.");
+end
+
+samples = clamp(double(samples(:)), -clip_level, clip_level);
+peak = max(abs(samples));
+if peak == 0 || target_amplitude == 0
+    out = zeros(size(samples));
+else
+    out = samples .* (double(target_amplitude) ./ peak);
+end
+end
+
+function validate_clip_level(clip_level)
+if ~isnumeric(clip_level) || ~isscalar(clip_level) || ~isfinite(clip_level) || clip_level <= 0
+    error("hddaudio:invalidSpecItem", "clip must be a finite positive scalar.");
+end
+end
+
+function [out, headroom_scale, frequency_hz] = add_visible_motion(segment, sample_rate_hz, amplitude, frequency_hz, command_limit, scale_headroom)
+if nargin < 6
+    scale_headroom = true;
+end
 if ~isnumeric(amplitude) || ~isscalar(amplitude)
     error("hddaudio:invalidSpecItem", "motionAmplitude must be a finite non-negative scalar.");
 end
@@ -248,7 +282,7 @@ end
 segment = double(segment(:));
 available_audio = max(command_limit - amplitude, 0);
 peak_audio = max(abs(segment));
-if peak_audio > available_audio && peak_audio > 0
+if scale_headroom && peak_audio > available_audio && peak_audio > 0
     headroom_scale = available_audio / peak_audio;
     segment = segment * headroom_scale;
 end
