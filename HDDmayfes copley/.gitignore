@@ -36,12 +36,14 @@ LineIDs.dbg.bak
 *.project.~u
 
 # folders that should be excluded
+.vs/
 _Boot/
 _CompileInfo/
 _Libraries/
 _ModuleInstall/
 _Deployment/
 _Repository/
+*.~u
 
 ### TwinCAT3.OpenFrameworks Stack ###
 OpenFrameworks.gitignore
