@@ -1,0 +1,281 @@
+function [command, metadata] = buildCommand(spec, cfg, progressCallback)
+%BUILDCOMMAND Build an int16 PLC command table from a replay spec.
+
+if nargin < 1 || isempty(spec)
+    spec = hddaudio.defaultSpec();
+end
+if nargin < 2 || isempty(cfg)
+    cfg = hddaudio.defaultConfig();
+else
+    cfg = hddaudio.mergeConfig(hddaudio.defaultConfig(), cfg);
+end
+if nargin < 3
+    progressCallback = [];
+end
+
+if ~isstruct(spec) || ~isfield(spec, "items")
+    error("hddaudio:invalidSpec", "Spec must be a struct with an items field.");
+end
+
+items = spec.items;
+if isstruct(items)
+    items = num2cell(items);
+end
+if ~iscell(items) || isempty(items)
+    error("hddaudio:invalidSpec", "Spec items must be a non-empty cell array or struct array.");
+end
+
+segments = cell(numel(items), 1);
+item_metadata = repmat(empty_item_metadata(), numel(items), 1);
+source_files = strings(numel(items), 1);
+source_count = 0;
+notify_progress(progressCallback, 0.05, "Rebuild: preparing command table");
+
+for idx = 1:numel(items)
+    item = items{idx};
+    if ~isstruct(item) || ~isfield(item, "type")
+        error("hddaudio:invalidSpecItem", "Each spec item must be a struct with a type field.");
+    end
+
+    item_type = lower(strtrim(string(item.type)));
+    switch item_type
+        case "square"
+            duration_seconds = item_value(item, "durationSeconds", 1.0);
+            amplitude = item_value(item, "amplitude", cfg.commandLimit);
+            period_seconds = item_value(item, "periodSeconds", 1.0);
+            segment = build_square_command(cfg.taskRateHz, duration_seconds, amplitude, period_seconds);
+            label = sprintf("square %.3fs", duration_seconds);
+            source_file = "";
+            source_sample_rate_hz = cfg.taskRateHz;
+            was_resampled = false;
+            motion_amplitude = 0;
+            motion_frequency_hz = 0;
+            motion_headroom_scale = 1;
+
+        case "wav"
+            file_name = string(item_value(item, "file", ""));
+            if strlength(strtrim(file_name)) == 0
+                error("hddaudio:invalidSpecItem", "WAV items must define a file field.");
+            end
+
+            file_path = resolve_audio_path(file_name, cfg.soundDir);
+            [samples, source_sample_rate_hz] = read_mono_audio(file_path);
+            [samples, was_resampled] = match_sample_rate(samples, source_sample_rate_hz, cfg.taskRateHz);
+
+            trim_tail_seconds = item_value(item, "trimTailSeconds", 0);
+            if trim_tail_seconds > 0
+                samples = trim_tail(samples, trim_tail_seconds * cfg.taskRateHz, file_name);
+            end
+
+            clip_level = item_value(item, "clip", cfg.defaultAudioClip);
+            torque_scale = item_value(item, "scale", cfg.defaultTorqueScale);
+            segment = scale_audio(samples, clip_level, torque_scale);
+            motion_amplitude = item_value(item, "motionAmplitude", 0);
+            motion_frequency_hz = item_value(item, "motionFrequencyHz", cfg.defaultVisibleMotionFrequencyHz);
+            [segment, motion_headroom_scale, motion_frequency_hz] = add_visible_motion( ...
+                segment, cfg.taskRateHz, motion_amplitude, motion_frequency_hz, cfg.commandLimit);
+            label = char(file_name);
+            source_file = file_name;
+            source_count = source_count + 1;
+            source_files(source_count, 1) = file_name;
+
+        otherwise
+            error("hddaudio:unsupportedSpecItem", "Unsupported spec item type: %s.", item_type);
+    end
+
+    segment = clamp(segment, -cfg.commandLimit, cfg.commandLimit);
+    segments{idx} = segment(:);
+    item_metadata(idx, 1) = struct( ...
+        "type", item_type, ...
+        "label", string(label), ...
+        "sourceFile", string(source_file), ...
+        "sourceSampleRateHz", double(source_sample_rate_hz), ...
+        "wasResampled", logical(was_resampled), ...
+        "numSamples", numel(segment), ...
+        "durationSeconds", double(numel(segment)) / double(cfg.taskRateHz), ...
+        "motionAmplitude", double(motion_amplitude), ...
+        "motionFrequencyHz", double(motion_frequency_hz), ...
+        "motionHeadroomScale", double(motion_headroom_scale), ...
+        "minCommand", double(min(segment)), ...
+        "maxCommand", double(max(segment)));
+    notify_progress(progressCallback, 0.05 + 0.85 * idx / numel(items), ...
+        sprintf("Rebuild: item %d / %d", idx, numel(items)));
+end
+
+raw_command = vertcat(segments{:});
+notify_progress(progressCallback, 0.94, "Rebuild: normalizing command");
+command = hddaudio.normalizeCommand(raw_command, cfg);
+source_files = source_files(1:source_count, 1);
+
+metadata = struct( ...
+    "specName", string(item_value(spec, "name", "unnamed")), ...
+    "taskRateHz", cfg.taskRateHz, ...
+    "sampleRateHz", cfg.taskRateHz, ...
+    "tableMaxN", cfg.tableMaxN, ...
+    "commandLimit", cfg.commandLimit, ...
+    "numSamples", numel(command), ...
+    "durationSeconds", double(numel(command)) / double(cfg.taskRateHz), ...
+    "minCommand", double(min(command)), ...
+    "maxCommand", double(max(command)), ...
+    "sourceFiles", source_files, ...
+    "items", item_metadata);
+notify_progress(progressCallback, 1.00, "Rebuild complete");
+end
+
+function meta = empty_item_metadata()
+meta = struct( ...
+    "type", string.empty(0, 1), ...
+    "label", string.empty(0, 1), ...
+    "sourceFile", string.empty(0, 1), ...
+    "sourceSampleRateHz", [], ...
+    "wasResampled", [], ...
+    "numSamples", [], ...
+    "durationSeconds", [], ...
+    "motionAmplitude", [], ...
+    "motionFrequencyHz", [], ...
+    "motionHeadroomScale", [], ...
+    "minCommand", [], ...
+    "maxCommand", []);
+end
+
+function value = item_value(item, field_name, default_value)
+if isfield(item, field_name)
+    value = item.(field_name);
+else
+    value = default_value;
+end
+end
+
+function [mono, fs] = read_mono_audio(file_path)
+if ~isfile(file_path)
+    error("hddaudio:fileNotFound", "Audio file not found: %s", file_path);
+end
+
+[y, fs] = audioread(file_path);
+if isempty(y)
+    error("hddaudio:emptyAudio", "Audio file is empty: %s", file_path);
+end
+
+mono = y(:, 1);
+end
+
+function [out, was_resampled] = match_sample_rate(samples, actual_rate, target_rate)
+actual_rate = double(actual_rate);
+target_rate = double(target_rate);
+if actual_rate <= 0 || target_rate <= 0
+    error("hddaudio:invalidSampleRate", "Audio sample rates must be positive.");
+end
+
+was_resampled = actual_rate ~= target_rate;
+if ~was_resampled
+    out = samples(:);
+    return;
+end
+
+out = resample_linear(samples(:), actual_rate, target_rate);
+end
+
+function out = resample_linear(samples, actual_rate, target_rate)
+if numel(samples) == 1
+    out = samples;
+    return;
+end
+
+target_count = max(1, round(numel(samples) * target_rate / actual_rate));
+in_time = (0:numel(samples) - 1)' ./ actual_rate;
+out_time = (0:target_count - 1)' ./ target_rate;
+out_time = min(out_time, in_time(end));
+out = interp1(in_time, double(samples(:)), out_time, "linear");
+end
+
+function out = scale_audio(samples, clip_level, torque_scale)
+samples = clamp(double(samples(:)), -clip_level, clip_level);
+out = samples * double(torque_scale);
+end
+
+function [out, headroom_scale, frequency_hz] = add_visible_motion(segment, sample_rate_hz, amplitude, frequency_hz, command_limit)
+if ~isnumeric(amplitude) || ~isscalar(amplitude)
+    error("hddaudio:invalidSpecItem", "motionAmplitude must be a finite non-negative scalar.");
+end
+amplitude = double(amplitude);
+command_limit = double(command_limit);
+headroom_scale = 1;
+
+if ~isfinite(amplitude) || amplitude < 0
+    error("hddaudio:invalidSpecItem", "motionAmplitude must be a finite non-negative scalar.");
+end
+if amplitude == 0
+    out = double(segment(:));
+    frequency_hz = 0;
+    return;
+end
+if amplitude > command_limit
+    error("hddaudio:invalidSpecItem", "motionAmplitude must be less than or equal to commandLimit.");
+end
+if ~isnumeric(frequency_hz) || ~isscalar(frequency_hz)
+    error("hddaudio:invalidSpecItem", "motionFrequencyHz must be positive when motionAmplitude is non-zero.");
+end
+frequency_hz = double(frequency_hz);
+if ~isfinite(frequency_hz) || frequency_hz <= 0
+    error("hddaudio:invalidSpecItem", "motionFrequencyHz must be positive when motionAmplitude is non-zero.");
+end
+
+segment = double(segment(:));
+available_audio = max(command_limit - amplitude, 0);
+peak_audio = max(abs(segment));
+if peak_audio > available_audio && peak_audio > 0
+    headroom_scale = available_audio / peak_audio;
+    segment = segment * headroom_scale;
+end
+
+t = (0:numel(segment) - 1)' ./ double(sample_rate_hz);
+motion = amplitude * sin(2 * pi * frequency_hz * t);
+out = segment + motion;
+end
+
+function out = trim_tail(samples, trim_count, label)
+trim_count = round(double(trim_count));
+if trim_count >= numel(samples)
+    error("hddaudio:trimTooLong", ...
+        "Trim length (%d samples) is not shorter than %s (%d samples).", ...
+        trim_count, label, numel(samples));
+end
+out = samples(1:end - trim_count);
+end
+
+function out = build_square_command(sample_rate_hz, duration_seconds, amplitude, period_seconds)
+if duration_seconds <= 0 || period_seconds <= 0
+    error("hddaudio:invalidSpecItem", "Square durationSeconds and periodSeconds must be positive.");
+end
+
+num_samples = round(duration_seconds * sample_rate_hz) + 1;
+t = (0:num_samples - 1)' / sample_rate_hz;
+out = double(amplitude) * ones(num_samples, 1);
+out(mod(t, period_seconds) >= (period_seconds / 2)) = -double(amplitude);
+end
+
+function file_path = resolve_audio_path(file_name, sound_dir)
+if is_absolute_path(file_name)
+    file_path = char(file_name);
+else
+    file_path = char(fullfile(sound_dir, file_name));
+end
+end
+
+function tf = is_absolute_path(path_value)
+path_value = string(path_value);
+path_text = char(path_value);
+tf = startsWith(path_value, filesep) || startsWith(path_value, "\\") || ...
+    ~isempty(regexp(path_text, "^[A-Za-z]:[\\/]", "once"));
+end
+
+function out = clamp(values, min_value, max_value)
+out = min(max(values, min_value), max_value);
+end
+
+function notify_progress(callback, fraction, message)
+if isempty(callback)
+    return;
+end
+callback(min(max(double(fraction), 0), 1), string(message));
+end
