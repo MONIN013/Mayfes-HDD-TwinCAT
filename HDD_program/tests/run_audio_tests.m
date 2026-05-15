@@ -16,12 +16,15 @@ assert(all(double(command) <= cfg.commandLimit), "Command exceeds positive clamp
 assert(all(double(command) >= -cfg.commandLimit), "Command exceeds negative clamp.");
 assert(numel(metadata.items) == 4, "Default spec must contain four replay items.");
 assert(isfield(metadata.items, "sourceSampleRateHz"), "Metadata must include source sample rates.");
+assert(isfield(metadata.items, "sourceFormat"), "Metadata must include source formats.");
 assert(isfield(metadata.items, "wasResampled"), "Metadata must include resample flags.");
+assert(isfield(metadata.items, "resampleMethod"), "Metadata must include resample methods.");
 assert(isfield(metadata.items, "motionAmplitude"), "Metadata must include visible motion amplitude.");
 assert(isfield(metadata.items, "motionFrequencyHz"), "Metadata must include visible motion frequency.");
-assert(metadata.items(2).motionAmplitude == 4000, "Default WAV item must include visible motion.");
+assert(metadata.items(2).motionAmplitude == cfg.defaultVisibleMotionAmplitude, "Default WAV item must include visible motion.");
 assert(metadata.items(2).motionFrequencyHz == 2.0, "Default WAV item motion frequency must be 2 Hz.");
 assert(metadata.items(2).motionHeadroomScale <= 1, "Visible motion must not increase audio headroom.");
+assert(metadata.items(2).sourceFormat == "WAV", "Default WAV metadata must include its source format.");
 
 mock = hddaudio.MockAdsTransport();
 cfg.transport = mock;
@@ -130,6 +133,7 @@ delete(spec_file);
 
 tmp_dir = tempname;
 mkdir(tmp_dir);
+tmp_cleanup = onCleanup(@()safe_rmdir(tmp_dir));
 resample_file = fullfile(tmp_dir, "four_k.wav");
 source_rate_hz = 4000;
 target_rate_hz = 8000;
@@ -147,7 +151,62 @@ assert(numel(resampled_command) == target_rate_hz, "Resampled command length mus
 assert(resampled_metadata.items(1).sourceSampleRateHz == source_rate_hz, ...
     "Metadata must keep the original WAV sample rate.");
 assert(resampled_metadata.items(1).wasResampled, "Metadata must flag resampled WAV items.");
+assert(resampled_metadata.items(1).resampleMethod == "polyphase", "Resampled items must report polyphase resampling.");
 assert(resampled_metadata.items(1).motionAmplitude == 0, "WAV items without visible motion must keep motion disabled.");
+
+wav441_file = fullfile(tmp_dir, "forty_four_k.wav");
+source_rate_hz = 44100;
+t = (0:source_rate_hz - 1)' ./ source_rate_hz;
+audiowrite(wav441_file, 0.05 * [sin(2 * pi * 220 * t), sin(2 * pi * 330 * t)], source_rate_hz);
+wav441_spec = struct();
+wav441_spec.name = "wav441";
+wav441_spec.items = {struct("type", "audio", "file", "forty_four_k.wav", "clip", 0.1, "scale", 10000, "trimTailSeconds", 0)};
+[wav441_command, wav441_metadata] = hddaudio.buildCommand(wav441_spec, resample_cfg);
+assert(numel(wav441_command) == target_rate_hz, "44.1 kHz audio must resample to one second at 8 kHz.");
+assert(wav441_metadata.items(1).sourceSampleRateHz == source_rate_hz, ...
+    "44.1 kHz metadata must keep the original sample rate.");
+assert(wav441_metadata.items(1).sourceFormat == "WAV", "44.1 kHz metadata must keep source format.");
+
+mp3_file = fullfile(tmp_dir, "tone.mp3");
+source_rate_hz = 44100;
+t = (0:source_rate_hz - 1)' ./ source_rate_hz;
+audiowrite(mp3_file, 0.05 * sin(2 * pi * 440 * t), source_rate_hz);
+mp3_spec = struct();
+mp3_spec.name = "mp3";
+mp3_spec.items = {struct("type", "audio", "file", "tone.mp3", "clip", 0.1, "scale", 10000, "trimTailSeconds", 0)};
+[mp3_command, mp3_metadata] = hddaudio.buildCommand(mp3_spec, resample_cfg);
+assert(isa(mp3_command, "int16"), "MP3 builds must return int16 commands.");
+assert(mp3_metadata.sampleRateHz == target_rate_hz, "MP3 builds must target the PLC sample rate.");
+assert(mp3_metadata.items(1).sourceSampleRateHz == source_rate_hz, "MP3 metadata must keep the original sample rate.");
+assert(mp3_metadata.items(1).sourceFormat == "MP3", "MP3 metadata must keep source format.");
+assert(mp3_metadata.items(1).wasResampled, "MP3 items must report resampling when source rate differs.");
+
+flac_file = fullfile(tmp_dir, "forty_eight_k.flac");
+source_rate_hz = 48000;
+t = (0:source_rate_hz - 1)' ./ source_rate_hz;
+audiowrite(flac_file, 0.05 * sin(2 * pi * 330 * t), source_rate_hz);
+flac_spec = struct();
+flac_spec.name = "flac";
+flac_spec.items = {struct("type", "audio", "file", "forty_eight_k.flac", "clip", 0.1, "scale", 10000, "trimTailSeconds", 0)};
+[flac_command, flac_metadata] = hddaudio.buildCommand(flac_spec, resample_cfg);
+assert(numel(flac_command) == target_rate_hz, "48 kHz FLAC must resample to one second at 8 kHz.");
+assert(flac_metadata.items(1).sourceFormat == "FLAC", "FLAC metadata must keep source format.");
+assert(flac_metadata.items(1).resampleMethod == "polyphase", "FLAC resampling must report polyphase.");
+
+preview_metadata = hddaudio.writePreviewWav(flac_command, flac_metadata, resample_cfg);
+assert(isfield(preview_metadata, "previewWavFile"), "Preview metadata must include the WAV file path.");
+assert(isfile(preview_metadata.previewWavFile), "Preview WAV must be written.");
+preview_info = audioinfo(preview_metadata.previewWavFile);
+assert(preview_info.SampleRate == target_rate_hz, "Preview WAV must use the PLC sample rate.");
+assert(preview_info.NumChannels == 1, "Preview WAV must be mono.");
+[preview_audio, preview_rate_hz] = audioread(preview_metadata.previewWavFile);
+assert(preview_rate_hz == target_rate_hz, "Preview WAV must be readable at the PLC sample rate.");
+assert(size(preview_audio, 2) == 1, "Preview samples must be one channel.");
+assert(~isempty(preview_audio), "Preview WAV must contain samples.");
+assert(all(abs(preview_audio) <= 1), "Preview WAV samples must be in audio range.");
+
+net_array = NET.convertArray(int16(1:5), "System.Int16");
+assert(net_array.Length == 5, "NET.convertArray must produce a .NET Int16 array.");
 
 motion_spec = struct();
 motion_spec.name = "motion";
@@ -235,4 +294,13 @@ assert(disk_status.angleIncActual == 11.5, "Disk status must read AngleIncActual
 
 fprintf("audio tests passed: %d samples, %.3f s.\n", ...
     metadata.numSamples, metadata.durationSeconds);
+end
+
+function safe_rmdir(pathName)
+if isfolder(pathName)
+    try
+        rmdir(pathName, "s");
+    catch
+    end
+end
 end

@@ -46,21 +46,24 @@ for idx = 1:numel(items)
             segment = build_square_command(cfg.taskRateHz, duration_seconds, amplitude, period_seconds);
             label = sprintf("square %.3fs", duration_seconds);
             source_file = "";
+            source_format = "";
             source_sample_rate_hz = cfg.taskRateHz;
             was_resampled = false;
+            resample_method = "none";
             motion_amplitude = 0;
             motion_frequency_hz = 0;
             motion_headroom_scale = 1;
 
-        case "wav"
+        case {"wav", "audio"}
             file_name = string(item_value(item, "file", ""));
             if strlength(strtrim(file_name)) == 0
-                error("hddaudio:invalidSpecItem", "WAV items must define a file field.");
+                error("hddaudio:invalidSpecItem", "Audio items must define a file field.");
             end
 
             file_path = resolve_audio_path(file_name, cfg.soundDir);
-            [samples, source_sample_rate_hz] = read_mono_audio(file_path);
-            [samples, was_resampled] = match_sample_rate(samples, source_sample_rate_hz, cfg.taskRateHz);
+            [samples, source_sample_rate_hz, source_format] = read_mono_audio(file_path);
+            [samples, was_resampled, resample_method] = match_sample_rate( ...
+                samples, source_sample_rate_hz, cfg.taskRateHz);
 
             trim_tail_seconds = item_value(item, "trimTailSeconds", 0);
             if trim_tail_seconds > 0
@@ -89,8 +92,10 @@ for idx = 1:numel(items)
         "type", item_type, ...
         "label", string(label), ...
         "sourceFile", string(source_file), ...
+        "sourceFormat", string(source_format), ...
         "sourceSampleRateHz", double(source_sample_rate_hz), ...
         "wasResampled", logical(was_resampled), ...
+        "resampleMethod", string(resample_method), ...
         "numSamples", numel(segment), ...
         "durationSeconds", double(numel(segment)) / double(cfg.taskRateHz), ...
         "motionAmplitude", double(motion_amplitude), ...
@@ -127,8 +132,10 @@ meta = struct( ...
     "type", string.empty(0, 1), ...
     "label", string.empty(0, 1), ...
     "sourceFile", string.empty(0, 1), ...
+    "sourceFormat", string.empty(0, 1), ...
     "sourceSampleRateHz", [], ...
     "wasResampled", [], ...
+    "resampleMethod", string.empty(0, 1), ...
     "numSamples", [], ...
     "durationSeconds", [], ...
     "motionAmplitude", [], ...
@@ -146,7 +153,7 @@ else
 end
 end
 
-function [mono, fs] = read_mono_audio(file_path)
+function [mono, fs, source_format] = read_mono_audio(file_path)
 if ~isfile(file_path)
     error("hddaudio:fileNotFound", "Audio file not found: %s", file_path);
 end
@@ -156,10 +163,16 @@ if isempty(y)
     error("hddaudio:emptyAudio", "Audio file is empty: %s", file_path);
 end
 
-mono = y(:, 1);
+[~, ~, ext] = fileparts(file_path);
+source_format = upper(erase(string(ext), "."));
+if strlength(source_format) == 0
+    source_format = "unknown";
 end
 
-function [out, was_resampled] = match_sample_rate(samples, actual_rate, target_rate)
+mono = mean(double(y), 2);
+end
+
+function [out, was_resampled, resample_method] = match_sample_rate(samples, actual_rate, target_rate)
 actual_rate = double(actual_rate);
 target_rate = double(target_rate);
 if actual_rate <= 0 || target_rate <= 0
@@ -169,23 +182,35 @@ end
 was_resampled = actual_rate ~= target_rate;
 if ~was_resampled
     out = samples(:);
+    resample_method = "none";
     return;
 end
 
-out = resample_linear(samples(:), actual_rate, target_rate);
+out = resample_polyphase(samples(:), actual_rate, target_rate);
+resample_method = "polyphase";
 end
 
-function out = resample_linear(samples, actual_rate, target_rate)
-if numel(samples) == 1
-    out = samples;
-    return;
-end
-
+function out = resample_polyphase(samples, actual_rate, target_rate)
 target_count = max(1, round(numel(samples) * target_rate / actual_rate));
-in_time = (0:numel(samples) - 1)' ./ actual_rate;
-out_time = (0:target_count - 1)' ./ target_rate;
-out_time = min(out_time, in_time(end));
-out = interp1(in_time, double(samples(:)), out_time, "linear");
+if numel(samples) == 1
+    out = repmat(double(samples(1)), target_count, 1);
+    return;
+end
+
+[p, q] = rat(target_rate / actual_rate, 1e-12);
+out = resample(double(samples(:)), p, q);
+out = force_sample_count(out, target_count);
+end
+
+function out = force_sample_count(samples, target_count)
+samples = double(samples(:));
+if numel(samples) > target_count
+    out = samples(1:target_count);
+elseif numel(samples) < target_count
+    out = [samples; repmat(samples(end), target_count - numel(samples), 1)];
+else
+    out = samples;
+end
 end
 
 function out = scale_audio(samples, clip_level, torque_scale)

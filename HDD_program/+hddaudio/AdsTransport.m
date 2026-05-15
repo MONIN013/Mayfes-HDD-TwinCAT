@@ -53,13 +53,10 @@ classdef AdsTransport < handle
         function writeArray(obj, symbol, values, netType)
             handle = obj.variableHandle(symbol);
             values = values(:);
-            netArray = NET.createArray(char(netType), numel(values));
 
             switch char(netType)
                 case "System.Int16"
-                    for idx = 1:numel(values)
-                        netArray(idx) = int16(values(idx));
-                    end
+                    netArray = hddaudio.AdsTransport.toNetInt16Array(values);
                 otherwise
                     error("hddaudio:unsupportedArrayType", "Unsupported array type: %s.", string(netType));
             end
@@ -133,6 +130,18 @@ classdef AdsTransport < handle
                     value = double(value);
                 otherwise
                     error("hddaudio:unsupportedScalarType", "Unsupported scalar type: %s.", string(netType));
+            end
+        end
+
+        function netArray = toNetInt16Array(values)
+            values = int16(values(:));
+            try
+                netArray = NET.convertArray(values, "System.Int16");
+            catch
+                netArray = NET.createArray("System.Int16", numel(values));
+                for idx = 1:numel(values)
+                    netArray(idx) = values(idx);
+                end
             end
         end
 

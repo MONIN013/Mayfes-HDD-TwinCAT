@@ -46,15 +46,15 @@ switch action
         result.app = app;
 
     case "generate"
-        [command, metadata] = hddaudio.buildCommand(spec, cfg);
+        [command, metadata] = build_preview_command(spec, cfg);
         result.command = command;
         result.metadata = metadata;
         assign_outputs(command, metadata);
-        fprintf("Generated %d samples (%.3f s).\n", ...
-            metadata.numSamples, metadata.durationSeconds);
+        fprintf("Generated %d samples (%.3f s). Preview: %s\n", ...
+            metadata.numSamples, metadata.durationSeconds, char(metadata.previewWavFile));
 
     case "upload"
-        [command, metadata] = hddaudio.buildCommand(spec, cfg);
+        [command, metadata] = build_preview_command(spec, cfg);
         ctrl = hddaudio.AudioReplayController(cfg);
         result.controller = ctrl;
         result.metadata = ctrl.upload(command, metadata);
@@ -62,7 +62,7 @@ switch action
         assign_outputs(command, result.metadata);
 
     case {"loop", "start-loop"}
-        [command, metadata] = hddaudio.buildCommand(spec, cfg);
+        [command, metadata] = build_preview_command(spec, cfg);
         ctrl = hddaudio.AudioReplayController(cfg);
         result.controller = ctrl;
         result.metadata = ctrl.upload(command, metadata);
@@ -71,7 +71,7 @@ switch action
         assign_outputs(command, result.metadata);
 
     case {"finite", "start-finite"}
-        [command, metadata] = hddaudio.buildCommand(spec, cfg);
+        [command, metadata] = build_preview_command(spec, cfg);
         ctrl = hddaudio.AudioReplayController(cfg);
         result.controller = ctrl;
         result.metadata = ctrl.upload(command, metadata);
@@ -142,6 +142,11 @@ end
 if ~isempty(fieldnames(opts.Config))
     cfg = hddaudio.mergeConfig(cfg, opts.Config);
 end
+end
+
+function [command, metadata] = build_preview_command(spec, cfg)
+[command, metadata] = hddaudio.buildCommand(spec, cfg);
+metadata = hddaudio.writePreviewWav(command, metadata, cfg);
 end
 
 function assign_outputs(command, metadata)

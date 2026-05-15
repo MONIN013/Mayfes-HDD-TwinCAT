@@ -23,6 +23,7 @@ diskCtrl = hddaudio.DiskBController(cfg);
 audioSpec = hddaudio.defaultSpec();
 audioItems = specItems(audioSpec);
 [command, metadata] = hddaudio.buildCommand(audioSpec, cfg);
+metadata = hddaudio.writePreviewWav(command, metadata, cfg);
 
 durationSeconds = double(metadata.durationSeconds);
 sampleRateHz = double(metadata.sampleRateHz);
@@ -119,8 +120,8 @@ playlistButtonGrid.ColumnWidth = {"1x"};
 playlistButtonGrid.Padding = [0 0 0 0];
 playlistButtonGrid.RowSpacing = 4;
 
-addWavButton = uibutton(playlistButtonGrid, "Text", "Add WAV", "ButtonPushedFcn", @onAddWav);
-addWavButton.Layout.Row = 1;
+addAudioButton = uibutton(playlistButtonGrid, "Text", "Add Audio", "ButtonPushedFcn", @onAddAudio);
+addAudioButton.Layout.Row = 1;
 removeButton = uibutton(playlistButtonGrid, "Text", "Remove", "ButtonPushedFcn", @onRemoveItem);
 removeButton.Layout.Row = 2;
 moveUpButton = uibutton(playlistButtonGrid, "Text", "Move Up", "ButtonPushedFcn", @onMoveUp);
@@ -390,9 +391,9 @@ refreshAllStatus();
 
         item = audioItems{row};
         itemType = lower(strtrim(string(item.type)));
-        if itemType ~= "wav"
+        if ~isAudioItemType(itemType)
             playlistTable.Data = playlistData(audioItems, metadata);
-            messageLabel.Text = "Only WAV rows are editable.";
+            messageLabel.Text = "Only audio rows are editable.";
             return;
         end
 
@@ -401,7 +402,7 @@ refreshAllStatus();
                 case 2
                     newFile = strtrim(string(event.NewData));
                     if strlength(newFile) == 0
-                        error("hddaudio:invalidSpecItem", "WAV file cannot be empty.");
+                        error("hddaudio:invalidSpecItem", "Audio file cannot be empty.");
                     end
                     item.file = char(newFile);
                 case 3
@@ -423,9 +424,11 @@ refreshAllStatus();
         end
     end
 
-    function onAddWav(~, ~)
-        [files, pathName] = uigetfile({"*.wav", "WAV files (*.wav)"}, ...
-            "Add WAV", char(cfg.soundDir), "MultiSelect", "on");
+    function onAddAudio(~, ~)
+        [files, pathName] = uigetfile({ ...
+            "*.wav;*.mp3;*.flac;*.m4a;*.mp4;*.ogg", "Audio files (*.wav, *.mp3, *.flac, *.m4a, *.mp4, *.ogg)"; ...
+            "*.*", "All files (*.*)"}, ...
+            "Add Audio", char(cfg.soundDir), "MultiSelect", "on");
         if isequal(files, 0)
             return;
         end
@@ -437,7 +440,7 @@ refreshAllStatus();
         for idx = 1:numel(files)
             fullPath = fullfile(pathName, files{idx});
             audioItems{end + 1} = struct( ...
-                "type", "wav", ...
+                "type", "audio", ...
                 "file", char(audioFileRef(fullPath, cfg.soundDir)), ...
                 "clip", cfg.defaultAudioClip, ...
                 "scale", cfg.defaultTorqueScale, ...
@@ -447,7 +450,7 @@ refreshAllStatus();
         end
 
         selectedAudioRow = numel(audioItems);
-        rebuildAudio("Added WAV file.");
+        rebuildAudio("Added audio file.");
     end
 
     function onRemoveItem(~, ~)
@@ -520,6 +523,7 @@ refreshAllStatus();
             audioSpec = currentSpec();
             setOperationProgress(0, "Rebuild: queued");
             [newCommand, newMetadata] = hddaudio.buildCommand(audioSpec, cfg, @setOperationProgress);
+            newMetadata = hddaudio.writePreviewWav(newCommand, newMetadata, cfg);
             command = newCommand;
             metadata = newMetadata;
             durationSeconds = double(metadata.durationSeconds);
@@ -527,7 +531,8 @@ refreshAllStatus();
             app.Command = command;
             app.Metadata = metadata;
             refreshAudioUiFromState();
-            messageLabel.Text = char(successMessage);
+            messageLabel.Text = sprintf("%s Preview WAV: %s", ...
+                char(successMessage), char(metadata.previewWavFile));
         catch err
             playlistTable.Data = playlistData(audioItems, metadata);
             setOperationProgress(0, "Rebuild failed");
@@ -844,7 +849,7 @@ for idx = 1:rowCount
     item = items{idx};
     itemType = lower(strtrim(string(item.type)));
     data{idx, 1} = char(itemType);
-    if itemType == "wav"
+    if isAudioItemType(itemType)
         data{idx, 2} = char(itemValue(item, "file", ""));
         data{idx, 3} = itemValue(item, "clip", NaN);
         data{idx, 4} = itemValue(item, "scale", NaN);
@@ -873,11 +878,16 @@ itemType = lower(strtrim(string(item.type)));
 switch itemType
     case "square"
         label = sprintf("square %.3fs", itemValue(item, "durationSeconds", 1.0));
-    case "wav"
+    case {"wav", "audio"}
         label = string(itemValue(item, "file", ""));
     otherwise
         label = itemType;
 end
+end
+
+function tf = isAudioItemType(itemType)
+itemType = lower(strtrim(string(itemType)));
+tf = itemType == "wav" || itemType == "audio";
 end
 
 function value = itemValue(item, fieldName, defaultValue)
