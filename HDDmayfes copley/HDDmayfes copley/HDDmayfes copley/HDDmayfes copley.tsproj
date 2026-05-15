@@ -17,7 +17,7 @@
 		</System>
 		<Plc>
 			<Project GUID="{4C82EF15-54C5-4654-A0CA-03891FEFED78}" Name="TestPLC" PrjFilePath="TestPLC\TestPLC.plcproj" TmcFilePath="TestPLC\TestPLC.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="1" TmcHash="{CF6DE595-A0D1-59B0-1D20-E09FF106E191}" TmcPath="TestPLC\TestPLC.tmc">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="1" TmcHash="{F2532EC2-3C19-7D04-2861-59B90CC58497}" TmcPath="TestPLC\TestPLC.tmc">
 					<Name>TestPLC Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="2" AreaNo="1">
@@ -79,13 +79,13 @@
 			<PlcAuxTask Affinity="#x00000004"/>
 		</Plc>
 		<Io>
-			<Device Id="3" Disabled="true" DevType="111" DevFlags="#x0003" AmsPort="28675" AmsNetId="192.168.10.3.4.1" RemoteName="Device 3 (EtherCAT)" InfoImageId="3">
+			<Device Id="3" DevType="111" DevFlags="#x0003" AmsPort="28675" AmsNetId="192.168.10.3.4.1" RemoteName="Device 3 (EtherCAT)" InfoImageId="3">
 				<Name>Device 3 (EtherCAT)</Name>
 				<AddressInfo>
 					<Pnp>
-						<DeviceDesc>X001 (TwinCAT-Intel PCI Ethernet Adapter (Gigabit))</DeviceDesc>
-						<DeviceName>\DEVICE\{ECE939C2-2D22-479D-AC83-EFA01A4C2CF0}</DeviceName>
-						<DeviceData>0001056e51c6</DeviceData>
+						<DeviceDesc>C[Tlbg (TwinCAT-Intel PCI Ethernet Adapter (Gigabit</DeviceDesc>
+						<DeviceName>\DEVICE\{F9FD2438-3E07-4313-8A38-6D8E2A3BE86F}</DeviceName>
+						<DeviceData>7c8334bfbb57</DeviceData>
 					</Pnp>
 				</AddressInfo>
 				<Image Id="2" AddrType="9" ImageType="3">
@@ -97,7 +97,7 @@
 					<EtherCAT SlaveType="2" PdiType="#x0208" MboxDataLinkLayer="true" CycleMBoxPolling="true" CoeType="15" EoeType="1" FoeType="1" VendorId="#x000000ab" ProductCode="#x000010c0" RevisionNo="#x00010004" InfoDataAddr="true" InfoDataSoeDS401="true" InfoDataDcTimes="true" EnableWdDivider0400="true" EnableWdTime0410="true" EnableWdTime0420="true" TimeoutStateChange1="100" TimeoutStateChange2="100" TimeoutStateChange3="100" TimeoutStateChange4="100" PortPhys="17" IdentificationAdo="308" SlotPdoIncrement="64" SlotIndexIncrement="2048" Type="BE2" Desc="BE2" PortABoxInfo="#x00ffffff">
 						<SyncMan>001000012600010001000000280000010001001026010000</SyncMan>
 						<SyncMan>001100012200010002000000280000010001001122010000</SyncMan>
-						<SyncMan>00120e006400010003000000000000000000001264010000</SyncMan>
+						<SyncMan>00120a006400010003000000000000000000001264010000</SyncMan>
 						<SyncMan>001820002000010004000000000000000000001820010000</SyncMan>
 						<Fmmu>0000000000000000001200020100000001000000000000000000000000000000</Fmmu>
 						<Fmmu>0000000000000000001800010100000002000000000000000000000000000000</Fmmu>
@@ -109,11 +109,12 @@
 						<MBoxUserCmdData>020003000900000012000000030000000100090300000000000000000000000020606000010000000a4d6f646573206f66204f7065726174696f6e00</MBoxUserCmdData>
 						<MBoxUserCmdData>020003000900000012000000030000000200090300000000000000000000000020606800010000000b4d6f646573206f66204f7065726174696f6e00</MBoxUserCmdData>
 						<MBoxUserCmdData>020003000a0000001e000000030000000000000000000000000000000000000020002b00020000001e00417869732042204465736972656420616d706c696669657220737461746500</MBoxUserCmdData>
+						<MBoxUserCmdData>020003000a0000001e000000030000000000000000000000000000000000000020002300020000001e00417869732041204465736972656420616d706c696669657220737461746500</MBoxUserCmdData>
 						<Pdo Name="Transmit PDO 1" Index="#x1a00" Flags="#x0000"/>
 						<Pdo Name="Transmit PDO 2" Index="#x1a01" Flags="#x0000"/>
 						<Pdo Name="Transmit PDO 3" Index="#x1a02" Flags="#x0000"/>
 						<Pdo Name="Transmit PDO 4" Index="#x1a03" Flags="#x0000"/>
-						<Pdo Name="Receive PDO 1" Index="#x1600" InOut="1" Flags="#x0000" SyncMan="2">
+						<Pdo Name="Receive PDO 1" Index="#x1600" InOut="1" Flags="#x0000">
 							<Entry Name="Axis B UV mode U input" Index="#x2b27">
 								<Type>INT</Type>
 							</Entry>
@@ -215,11 +216,12 @@
 		</Io>
 	</Project>
 	<Mappings>
+		<MappingInfo Identifier="{00000000-2001-0850-0020-500820000403}" Id="#x02030010"/>
 		<OwnerA Name="TIPC^TestPLC^TestPLC Instance">
 			<OwnerB Name="TIID^Device 3 (EtherCAT)^Drive 1 (BE2)">
+				<Link VarA="PlcTask Inputs^Audio_A.Statusword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
 				<Link VarA="PlcTask Inputs^Disk_B.Statusword" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Inputs^Status word"/>
 				<Link VarA="PlcTask Inputs^Disk_B.TorqueActual" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Inputs^Torque actual value"/>
-				<Link VarA="PlcTask Inputs^Audio_A.Statusword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Inputs^Status word"/>
 				<Link VarA="PlcTask Outputs^Audio_A.Controlword" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Control word"/>
 				<Link VarA="PlcTask Outputs^Audio_A.TargetTorque" VarB="Module 1 (Cyclic torque Mode)^Cyclic torque Outputs^Target Torque"/>
 				<Link VarA="PlcTask Outputs^Disk_B.CommutationAngle" VarB="Module 2 (Cyclic torque with commutation angle Mode)^Cyclic torque with commutation angle Outputs^Commutation angle"/>

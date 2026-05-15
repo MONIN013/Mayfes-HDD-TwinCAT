@@ -15,7 +15,7 @@ p.addParameter("adsAssembly", "", @(x)ischar(x) || isstring(x));
 p.addParameter("namespace", "Audio_A", @(x)ischar(x) || isstring(x));
 p.addParameter("defaultAudioClip", 0.1, @is_positive_scalar);
 p.addParameter("defaultTorqueScale", 3 * 40000, @is_positive_scalar);
-p.addParameter("defaultVisibleMotionAmplitude", 4000, @is_nonnegative_scalar);
+p.addParameter("defaultVisibleMotionAmplitude", 8000, @is_nonnegative_scalar);
 p.addParameter("defaultVisibleMotionFrequencyHz", 2.0, @is_positive_scalar);
 p.addParameter("diskNamespace", "Disk_B", @(x)ischar(x) || isstring(x));
 p.addParameter("diskRestartTimeoutSeconds", 2.0, @is_positive_scalar);
